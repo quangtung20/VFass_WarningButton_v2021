@@ -228,14 +228,14 @@ bool lrwan::sendData(const char* sms,const char* expectAnswer, int timeout, int 
 	bool tmp =0;
 	for(int i=0;i<retrytime;i++){
 		LR_DEBUG.println("Prepare for reset LORAWAN");
-		HAL_GPIO_WritePin(LRWAN_RESRT_GPIO_Port, LRWAN_RESRT_Pin, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(LRWAN_ONOFF_GPIO_Port, LRWAN_ONOFF_Pin, GPIO_PIN_RESET);
 		HAL_Delay(1000);
-		HAL_GPIO_WritePin(LRWAN_RESRT_GPIO_Port, LRWAN_RESRT_Pin, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(LRWAN_ONOFF_GPIO_Port, LRWAN_ONOFF_Pin, GPIO_PIN_SET);
 		HAL_Delay(4000);
 			LR_DEBUG.println("Done Reset LORAWAN");
 			if(sendCommand (sms,expectAnswer, timeout)==1){
 				tmp=1;
-				response("OK", 1000);
+//				response("OK", 1000);
 //				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
 //				HAL_Delay(1000);
 //				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);

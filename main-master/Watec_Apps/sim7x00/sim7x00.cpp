@@ -237,70 +237,50 @@ bool sim7x00::sendATcommand (const char* ATcommand, const char* expected_answer,
 /*____________________________________________________________________________________________________________________________*/
 bool sim7x00::init(int timeout){
 	// Khởi tạo UART 1 và kích hoạt ngắt :
-	MX_USART1_UART_Init();
-	HAL_UART_Receive_IT(&huart1, (uint8_t*)rxBuff, 1) ;
+//	HAL_UART_Receive_IT(&huart1, (uint8_t*)rxBuff, 1) ;
 
 	// Khởi động module sim bằng cách set chân PWRKEY mức 0 trên module sim
-	SIM_DEBUG.println("SIM7600E booting ... " ) ;
-	HAL_GPIO_WritePin( SIM7600_PWRKEY_GPIO_Port, SIM7600_PWRKEY_Pin, (GPIO_PinState) 1) ;
-	HAL_GPIO_WritePin( SIM7600_PWRKEY_GPIO_Port, SIM7600_PWRKEY_Pin, (GPIO_PinState) 0) ;
-	uint32_t tickStart = HAL_GetTick();
-	// Chờ ~ > 10s để quá trình khởi động module sim hoàn tất
-	HAL_Delay(20000) ;
+	SIM_DEBUG.println("Sim7x00e booting ..." ) ;
+	HAL_UART_Receive_IT( huartx, (uint8_t*)rxBuff, 1 ) ;
 
-	int step = 0 ;
-	bool checkStep[20] ;
-	bool checkInit = false ;
+	HAL_GPIO_WritePin( SIM7600_PWRKEY_GPIO_Port, SIM7600_PWRKEY_Pin, (GPIO_PinState)0 ) ;
+	HAL_GPIO_WritePin( SIM7600_FLIGHTMODE_GPIO_Port, SIM7600_FLIGHTMODE_Pin, (GPIO_PinState)0 ) ;
+	HAL_GPIO_WritePin( SIM7600_RESET_GPIO_Port, SIM7600_RESET_Pin, (GPIO_PinState)0 ) ;
 
-	while( checkInit == false ){
-		if ( (int)( HAL_GetTick() - tickStart )  >=  timeout ) {
-						break ;
-					}
-		switch (step) {
-			case 0:
-				checkStep[step] = sendATcommand((char*)"AT\r", "OK", 2000) ;  // check AT response
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 1:
-				checkStep[step] = sendATcommand((char*)"AT+CREG?\r", "OK", 2000) ;
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 2:
-				checkStep[step] = sendATcommand((char*)"AT+CNMP=2\r", "OK", 2000) ;
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 3:
-				checkStep[step] = sendATcommand((char*)"ATI\r", "OK", 2000) ;
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 4:
-				checkStep[step] = sendATcommand("AT+CNMI=2,1,0,0,0\r", "OK", 2000 ) ;
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 5:
-				SIM_DEBUG.println("Setting up SMS... " ) ;
-				checkStep[step] = sendATcommand((char*)"AT+CNMP=2\r", "OK", 2000) ;
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 6:
-				SIM_DEBUG.println("Delete all old SMS... " ) ;
-				checkStep[step] = sendATcommand("AT+CMGD=,4\r", "OK", 1000);    // xóa hết toàn bộ tin nhắn
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 7:
-				SIM_DEBUG.println("Set SMS mode to text... ");
-				checkStep[step] = sendATcommand("AT+CMGF=1\r", "OK", 1000);    // sets the SMS mode to text
-				if (checkStep[step] == true) step++ ;
-				break ;
-			case 8:
-				checkInit = true ;
-				break;
-		}
+	// Khi Start, nếu Sim đã khởi động trước đó ( == true ) thì bỏ qua, còn không ( == false ) thì kích chân
+
+		HAL_GPIO_WritePin( SIM7600_PWRKEY_GPIO_Port, SIM7600_PWRKEY_Pin, (GPIO_PinState)1 ) ;
+
+
+
+		HAL_GPIO_WritePin( SIM7600_FLIGHTMODE_GPIO_Port, SIM7600_FLIGHTMODE_Pin, (GPIO_PinState)0 ) ;
+
+
+		HAL_GPIO_WritePin( SIM7600_RESET_GPIO_Port, SIM7600_RESET_Pin, (GPIO_PinState)0 ) ;
+
+	uint32_t tikStarted = HAL_GetTick();
+	while ((unsigned int)(HAL_GetTick() - tikStarted) <= 90000)
+	{
+		SIM_DEBUG.println(".");
+		HAL_Delay(3000);
+		IWDG->KR = 0xAAAA;
 	}
 
-	rxDone_FLAG = 0 ;
-	SIM_DEBUG.println("SIM7600E init completed ! ") ;
-	return checkInit;
+	sendATcommand( "AT", "OK", 100 ) ;
+	sendATcommand( "AT+CREG?", "OK", 100 ) ;
+	sendATcommand( "AT+CNMP=2", "OK", 100 ) ;
+	sendATcommand( "ATI", "OK", 5000 ) ;
+	sendATcommand( "AT+CNMI=2,1,0,0,0", "OK", 100 ) ;
+	sendATcommand( "AT+CNMP=2", "OK", 100 ) ;
+	sendATcommand("AT+CPMS=\"SM\",\"SM\",\"SM\"", "OK", 200 ); // Select đường dẫn bộ nhớ tin nhắn
+	sendATcommand("AT+CMGL=\"ALL\"", "OK", 5000);
+	sendATcommand( "AT+CMGD=,4", "OK", 100 ) ; // Xóa hết toàn bộ tin nhắn
+	sendATcommand( "AT+CMGF=1", "OK", 100 ) ;
+	// update date and time automatically
+	sendATcommand("AT+CTZU=1", "OK", 5000);
+	IWDG->KR = 0xAAAA;
+
+	return true ;
 
 }
 

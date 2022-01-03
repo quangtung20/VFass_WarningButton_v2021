@@ -29,17 +29,17 @@
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 #define DATALOGGER_NUMBER "0365106405" // sdt Datalogger
-#define SIM_WARNING_MSG "canhbao5" // tin nhan canh bao nut nhan gui sang datalogger bang song vien thong
-#define SIM_STOP_MSG "stop" // tin nhan dung canh bao nut nhan gui sang datalogger bang song vien thong
-#define LRWAN_WARNING_MSG "MS+WARNINGSTART" // tin nhan canh bao gui qua AT mega bang giao thuc UART
-#define LRWAN_STOP_MSG "MS+WARNINGSTOP" // tin nhan dung canh bao gui qua AT mega bang giao thuc UART
-#define LRWAN_WARNING_RES_MSG "SM+WARNINGSTART" // tin nhan nhan ve sau khi AT mega hoan thanh canh bao
-#define LRWAN_STOP_RES_MSG "SM+WARNINGSTOP" // tin nhan nhan ve sau khi AT mega hoan thanh dung canh bao
+#define SIM_WARNING_MSG "*canhbao5" // tin nhan canh bao nut nhan gui sang datalogger bang song vien thong
+#define SIM_STOP_MSG "*stop" // tin nhan dung canh bao nut nhan gui sang datalogger bang song vien thong
+#define LRWAN_WARNING_MSG "MS+VFASS00100000001WNLV5" // tin nhan canh bao gui qua AT mega bang giao thuc UART
+#define LRWAN_STOP_MSG "MS+VFASS00100000001WSTOP" // tin nhan dung canh bao gui qua AT mega bang giao thuc UART
+#define LRWAN_WARNING_RES_MSG "OK" // tin nhan nhan ve sau khi AT mega hoan thanh canh bao
+#define LRWAN_STOP_RES_MSG "OK" // tin nhan nhan ve sau khi AT mega hoan thanh dung canh bao
 #define LRWAN_DATA_RES_MSG "SM+PERDATA_OK" // tin nhan nhan ve tu AT mega sau khi du lieu da duoc truyen qua AT mega
 #define LRWAN_CLC_OK "SM+CLC_OK" // tin nhan nhan ve tu AT mega khi co song lora
 #define LRWAN_CLC_LOST "SM+CLC_LOST" // tin nhan nhan ve tu AT mega khi khong co song lora
 #define LOW_BAT_MSG "pin yeu" // tin nhan gui di den cac so dien thoai duoc chi dinh khi pin yeu
-#define LOW_BAT_PHONE_NUMBER_1 "0981605944" // So dien thoai chi dinh duoc gui tin nhan bao pin yeu
+#define LOW_BAT_PHONE_NUMBER_1 "0365106405" // So dien thoai chi dinh duoc gui tin nhan bao pin yeu
 #define TIME_MSG_DISPLAY 5000 // thoi gian hien thi hoan thanh, hoac that bai khi canh bao
 /* USER CODE END PTD */
 
@@ -57,34 +57,28 @@
 /* USER CODE BEGIN PV */
 
 sim7x00 SIM7600E(&huart1) ;
-debug   SYSTEM(&huart5) ;
-lrwan   LRWAN(&huart4) ;
+debug SYSTEM(&huart5) ;
+lrwan LRWAN(&huart4) ;
 
 uint8_t warningProcess = IDLE ;
-uint8_t stopProcess    = IDLE ;
-uint8_t updateProcess  = IDLE ;
-uint8_t	btnWarning 	   = IDLE ;
-uint8_t btnStop 	   = IDLE ;
-uint8_t sleepStatus    = IDLE ;
+uint8_t stopProcess = IDLE ;
+uint8_t updateProcess = IDLE ;
+uint8_t	btnWarning 	= IDLE ;
+uint8_t btnStop 	= IDLE ;
+uint8_t sleepStatus = IDLE ;
+bool initFlag = false ;
+bool waitFlag = false ;
+bool doneWarningFlag = false ;
 
 sim_events_t sim7600Event ;
-lr_events_t  lrwanEvent ;
+lr_events_t lrwanEvent ;
 
 /* USER CODE END PV */
 int warningEvent = IDLE_M ;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
-/*__________________________________________ San sang kich hoat ___________________________________________________*/
-void waitForNextTrigger() {
-	SSD1306_Clear_Data();
-	SSD1306_Putstring(3,5, (char*)"SAN SANG KICH HOAT", &Font_5x7, SSD1306_COLOR_WHITE);
-	SYSTEM.println("SAN SANG KICH HOAT");
-}
-
-
-/*__________________________________________Xử lí ngắt UART___________________________________________________*/
+/*____________________________________Xử lí ngắt UART______________________________________________*/
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if ( huart -> Instance == USART1 ) {
 		SIM7600E.IRQhandler() ;
@@ -103,15 +97,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		SystemClock_Config ();
 		HAL_ResumeTick();
 
-		if((stopProcess == 0)){
-			if(warningProcess == 0){
-				warningProcess=BTN_START_WARNING_PRESSED;
-				SSD1306_Putstring(4, 5, (char*)"SAP TOI : CANH BAO", &Font_5x7, SSD1306_COLOR_WHITE);
-			} else{
-				SSD1306_Putstring(4, 5, (char*)"DA AN CANH BAO", &Font_5x7, SSD1306_COLOR_WHITE);
-			}
+		if((stopProcess == 0 && initFlag == true)){
+			waitFlag = false;
+			warningProcess=BTN_START_WARNING_PRESSED;
+//			SSD1306_Putstring(4, 5, (char*)"SAP TOI : CANH BAO", &Font_5x7, SSD1306_COLOR_WHITE);
 		}else {
-			SSD1306_Putstring(4, 25, (char*)"VUI LONG CHO!", &Font_5x7, SSD1306_COLOR_WHITE);
+			SSD1306_Putstring(4, 5, (char*)"KHONG AN CANH BAO", &Font_5x7, SSD1306_COLOR_WHITE);
 		}
 
 
@@ -125,15 +116,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		SystemClock_Config ();
 		HAL_ResumeTick();
 
-		if( warningProcess==0 ){
-			if(stopProcess == 0){
-				stopProcess =BTN_STOP_WARNING_PRESSED;
-				SSD1306_Putstring(4, 5, (char*)"SAP TOI : DUNG ", &Font_5x7, SSD1306_COLOR_WHITE);
-			}else{
-				SSD1306_Putstring(4, 5, (char*)"DA AN NUT DUNG ", &Font_5x7, SSD1306_COLOR_WHITE);
-			}
+		if((warningProcess==0 && initFlag == true)){
+			waitFlag = false;
+			stopProcess =BTN_STOP_WARNING_PRESSED;
+//			SSD1306_Putstring(4, 5, (char*)"SAP TOI : DUNG ", &Font_5x7, SSD1306_COLOR_WHITE);
 		}else {
-			SSD1306_Putstring(4, 25, (char*)"VUI LONG CHO!", &Font_5x7, SSD1306_COLOR_WHITE);
+			SSD1306_Putstring(4, 5, (char*)"KHONG DUNG CANH BAO", &Font_5x7, SSD1306_COLOR_WHITE);
 		}
 
 		for(uint16_t i=0;i<10000;i++);
@@ -144,14 +132,13 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 
 
-/*________________________________________Xử lí sự kiện ngắt RTC_________________________________________________*/
+/*____________________________________Xử lí sự kiện ngắt RTC____________________________________________*/
 //void HAL_RTCEx_WakeUpTimerEventCallback(RTC_HandleTypeDef *hrtc)
 //{
 //	SystemClock_Config();
 //	HAL_ResumeTick();
-//	if(warningProcess==0 && sleepStatus == 0 && stopProcess == 0){
-//	HAL_NVIC_SystemReset();
-//	}
+//	updateProcess=MQTT_PUBLIC_DATA;
+//	SSD1306_Putstring(4, 5, (char*)"SAP TOI : CAP NHAT", &Font_5x7, SSD1306_COLOR_WHITE);
 //}
 /* USER CODE END PFP */
 
@@ -159,7 +146,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /* USER CODE BEGIN 0 */
 
 
-/*_____________________________________________Đọc dữ liệu Pin____________________________________________________*/
+/*____________________________________Đọc dữ liệu Pin____________________________________________*/
 
 char* readPin() {
 
@@ -168,19 +155,13 @@ char* readPin() {
 	 float battery;
 	 HAL_ADC_Start(&hadc);
 	 adc=HAL_ADC_GetValue(&hadc);
-	 battery=(((adc-1625.0)/2060.0)*100);
-	 if(battery>99){
-		 sprintf(bat,"%d",99);
-	 }else if(battery<0){
-		 sprintf(bat,"%d",0);
-	 }else{
-		 sprintf(bat,"%d",(int)battery);
-	 }
+	 battery=((adc/4095.0)*100);
+	 sprintf(bat,"%d",(int)battery);
 	 return bat;
 }
 
 
-/*_________________________Hiển thị cột sóng viễn thông, biểu tượng lrwan, thời lượng pin __________________________*/
+/*_______________________Hiển thị cột sóng viễn thông, biểu tượng lrwan, thời lượng pin ______________________*/
 void preHeader(){
 	SSD1306_Clear_Header();
 	SSD1306_DrawBitmap(0, 0, simSignal, 15, 15, SSD1306_COLOR_WHITE );
@@ -195,22 +176,22 @@ void preHeader(){
 	SSD1306_DrawBitmap( 90, 1, lowBat, 9, 15, SSD1306_COLOR_WHITE );
 	}
 
-//	strcat(bat,"%");
-//	SSD1306_GotoXY ( 103, 5);
-//	SSD1306_Puts ( (char*)bat, &Font_5x7, SSD1306_COLOR_WHITE );
+	strcat(bat,"%");
+	SSD1306_GotoXY ( 103, 5);
+	SSD1306_Puts ( (char*)bat, &Font_5x7, SSD1306_COLOR_WHITE );
 	SSD1306_UpdateScreen();
 
 	// Hiển thị cây cột sóng
 
-	SSD1306_DrawBitmap( 40, 1, signal, 23, 15, SSD1306_COLOR_WHITE );
-	SSD1306_UpdateScreen();
+//	SSD1306_DrawBitmap( 40, 1, signal, 23, 15, SSD1306_COLOR_WHITE );
+//	SSD1306_UpdateScreen();
 }
 
 /*_______________________ Hiển thị sóng viễn thông, tình trạng kết nối lrwan, thời lượng pin __________________________*/
 void displayHeader(){
 	SSD1306_Clear_Header();
-
 	// Hiển thị cột sóng
+
 	SSD1306_DrawBitmap(0, 0, simSignal, 15, 15, SSD1306_COLOR_WHITE );
 	if ( SIM7600E.getIntCSQ() > 6 ){
 		SSD1306_DrawFilledRectangle(13, 10, 2, 5, SSD1306_COLOR_WHITE );
@@ -225,7 +206,6 @@ void displayHeader(){
 		SSD1306_DrawFilledRectangle(25, 1, 2, 14, SSD1306_COLOR_WHITE );
 	}
 	SSD1306_UpdateScreen();
-
 	// Hiển thị Pin
 	char bat[50]="";
 	strcat( bat, readPin());
@@ -234,7 +214,7 @@ void displayHeader(){
 	SSD1306_DrawBitmap( 90, 1, fullBat, 14, 15, SSD1306_COLOR_WHITE );
 	}else {
 	SSD1306_DrawBitmap( 90, 1, lowBat, 9, 15, SSD1306_COLOR_WHITE );
-	SIM7600E.sendSMS(LOW_BAT_PHONE_NUMBER_1, LOW_BAT_MSG);
+//	SIM7600E.sendSMS(LOW_BAT_PHONE_NUMBER_1, LOW_BAT_MSG);
 	}
 
 	strcat(bat,"%");
@@ -243,8 +223,9 @@ void displayHeader(){
 	SSD1306_UpdateScreen();
 
 	// Hiển thị cây cột sóng
-	SSD1306_DrawBitmap( 40, 1, signal, 23, 15, SSD1306_COLOR_WHITE );
-	SSD1306_UpdateScreen();
+
+//	SSD1306_DrawBitmap( 40, 1, signal, 23, 15, SSD1306_COLOR_WHITE );
+//	SSD1306_UpdateScreen();
 }
 
 
@@ -258,100 +239,119 @@ bool simCheckingRespond(const char* resMsg){
 	}else {
 
 		SYSTEM.println("Button was not responded by SIM");
+		HAL_Delay(1000);
 		return 0;
 	}
 	return 0 ;
 }
 
 
-/*_____________________________________Kiểm tra lrwan đã hoàn thành cảnh báo chưa_______________________________________*/
+/*______________________Kiểm tra lrwan đã hoàn thành cảnh báo chưa__________________________*/
 //
 int lrwanSendAndCheckingRespond(const char* sms, const char* expectAnswer ){
 
 	char payload[50]={0};
 	strcat(payload,sms);
 	strcat(payload,"\r");
-
 	// setup payload dữ liệu gửi lora
-	if(LRWAN.sendData(sms,expectAnswer,20000,3)!=0){
+	if(LRWAN.sendData(sms,expectAnswer,15000,3)!=0){
 		return 1;
 	}else{
-		SYSTEM.println("!!!!Failed to send by LORAWAN!!!\n");
+		HAL_Delay(2000);
+		SYSTEM.println("!!!!Failed to send by LORA!!!\n");
 		return 0;
 	}
 }
 
 
-/*______________________________________________Cấp nguồn cho SIM, AT MEGA_______________________________________________*/
+/*_____________________________Cấp nguồn cho SIM, AT MEGA___________________________________*/
 void prepareStopMode(){
 
-	SIM7600E.powerOff() ;
-	HAL_Delay(TIME_MSG_DISPLAY) ;
-
+	HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(LRWAN_ONOFF_GPIO_Port, LRWAN_ONOFF_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(SIM7600_ONOFF_GPIO_Port, SIM7600_ONOFF_Pin, GPIO_PIN_RESET);
 
-
 }
 
 
-/*_________________________________________________Ngắt nguồn SIM, AT MEGA_______________________________________________*/
+/*_______________________________Ngắt nguồn SIM, AT MEGA____________________________________*/
 void prepareForProcess(){
-	HAL_GPIO_WritePin(SIM7600_ONOFF_GPIO_Port, SIM7600_ONOFF_Pin, (GPIO_PinState)1);
-	HAL_GPIO_WritePin(LRWAN_ONOFF_GPIO_Port, LRWAN_ONOFF_Pin, (GPIO_PinState)1);
-	HAL_GPIO_WritePin( SIM7600_FLIGHTMODE_GPIO_Port, SIM7600_FLIGHTMODE_Pin, (GPIO_PinState)0) ;
-	HAL_GPIO_WritePin( SIM7600_PWRKEY_GPIO_Port, SIM7600_PWRKEY_Pin, (GPIO_PinState)1) ;
-	HAL_GPIO_WritePin( SIM7600_RESET_GPIO_Port, SIM7600_RESET_Pin, (GPIO_PinState)0) ;
-	HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin,(GPIO_PinState)0);
 
+	HAL_GPIO_WritePin(LRWAN_ONOFF_GPIO_Port, LRWAN_ONOFF_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(SIM7600_ONOFF_GPIO_Port, SIM7600_ONOFF_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(LRWAN_RESRT_GPIO_Port,LRWAN_RESRT_Pin, GPIO_PIN_SET);
 
 }
 
-/*____________________________________________Khởi tạo các thông số, Sim, lrwan, oled_____________________________________*/
+/*____________________________________Khởi tạo các thông số, Sim, lrwan, oled_____________________________________*/
+
+
+void displayDoneWarning(bool doneWarningFlag){
+	SSD1306_Clear();
+	SSD1306_DrawBitmap(2, 16, logo, 128, 35, SSD1306_COLOR_WHITE);
+	displayHeader();
+	while(waitFlag == true){
+		HAL_Delay(1000);
+		if(doneWarningFlag == true){
+			SSD1306_Putstring(4,10, (char*)"HOAN THANH CANH BAO", &Font_5x7, SSD1306_COLOR_WHITE);
+		}else{
+			SSD1306_Putstring(4,8, (char*)"XIN VUI LONG THU LAI", &Font_5x7, SSD1306_COLOR_WHITE);
+		}
+
+		HAL_Delay(2000);
+		SSD1306_Clear_Bottom();
+	}
+	SSD1306_Clear_Data();
+}
 
 void init(){
 
+	initFlag = false;
 	SSD1306_Init();
 	SSD1306_Clear();
 	SSD1306_DrawBitmap(2, 16, logo, 128, 35, SSD1306_COLOR_WHITE);
 	SSD1306_Putstring(4,15, (char*)"DANG KHOI DONG...", &Font_5x7, SSD1306_COLOR_WHITE);
 	SSD1306_UpdateScreen();
+
 	// Hiển thị logo
 	prepareForProcess();
 	preHeader();
 	LRWAN.init() ;
+
 	if(SIM7600E.init(30000)==1){
-		SSD1306_Putstring(4,5, (char*)"HOAN THANH KHOI DONG!", &Font_5x7, SSD1306_COLOR_WHITE);
-	}else
+		SSD1306_Putstring(4,30, (char*)"HOAN THANH!", &Font_5x7, SSD1306_COLOR_WHITE);
+	}else{
 		SSD1306_Putstring(4,30, (char*)"SIM BI LOI!", &Font_5x7, SSD1306_COLOR_WHITE);
+	}
+
 	// hiển thị header sau khi khởi động xong
 	displayHeader();
 	SYSTEM.println("DONE INIT");
 	HAL_Delay(TIME_MSG_DISPLAY);
+	initFlag = true;
+	waitFlag = true;
 }
 
 
-/*_____________________________________________Cài đặt để vào chế độ ngủ___________________________________________________*/
+/*________________________________Cài đặt để vào chế độ ngủ________________________________________*/
 
 void enterStopMode(){
 	// khi đang vào chế độ ngủ thì set cờ sleepStatus lên 1 để không thể thực hiện tác vụ nào trong lúc chuẩn bị ngủ nữa
-//	sleepStatus = 1;
+	sleepStatus = 1;
 	SSD1306_Clear_Data();
-	SSD1306_Putstring(3,5, (char*)"SAN SANG KICH HOAT", &Font_5x7, SSD1306_COLOR_WHITE);
-	SYSTEM.println("SAN SANG KICH HOAT");
-//	HAL_Delay(TIME_MSG_DISPLAY);
-//	prepareStopMode();
-//	SSD1306_Clear();
-//	HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_RESET);
-//	sleepStatus = 0;
-
+	prepareStopMode();
+	SSD1306_Putstring(3,5, (char*)"TIET KIEM NANG LUONG", &Font_5x7, SSD1306_COLOR_WHITE);
+	SYSTEM.println("ENTER STOP MODE");
+	HAL_Delay(TIME_MSG_DISPLAY);
+	SSD1306_Clear();
+	sleepStatus = 0;
 	// Vì systick là ngắt hệ thống nên cần ngừng lại để tránh đánh thức vi điều kiển khi vào chế độ ngủ
-//	HAL_SuspendTick();
-//	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
+	HAL_SuspendTick();
+	HAL_PWR_EnterSTOPMode(PWR_LOWPOWERREGULATOR_ON,PWR_STOPENTRY_WFI);
 }
 
 
-/*______________________________________________Gửi dữ liệu thiết bị bằng lrwan___________________________________________*/
+/*__________________________________Gửi dữ liệu thiết bị bằng lrwan____________________________________*/
 
 void lrwanUpdateData(){
 
@@ -361,41 +361,38 @@ void lrwanUpdateData(){
 		strcat(lwPayload,csqData);
 		strcat(lwPayload,pin);
 		strcat(lwPayload,"\r");
-
 		// setup payload để gửi dữ liệu qua atmega
 		SSD1306_Clear_Status2();
 		SSD1306_Putstring(4, 5, (char*)"                        ", &Font_5x7, SSD1306_COLOR_WHITE);
 		SSD1306_Putstring(2, 5, (char*)"______CAP NHAT______", &Font_5x7, SSD1306_COLOR_WHITE);
-		HAL_Delay(100);
-		SSD1306_Putstring(3, 5, (char*)"LoRa/LoRaWAN ... ", &Font_5x7, SSD1306_COLOR_WHITE);
+
+		SSD1306_Putstring(3, 5, (char*)"LoRa/LoRa ... ", &Font_5x7, SSD1306_COLOR_WHITE);
 
 		if ( LRWAN.sendData(lwPayload, LRWAN_DATA_RES_MSG, 8000,3 )){
 			SSD1306_Putstring(4, 5, (char*)"-> HOAN THANH!", &Font_5x7, SSD1306_COLOR_WHITE);
 		}else {
 			SSD1306_Putstring(4, 5, (char*)"-> THAT BAI!", &Font_5x7, SSD1306_COLOR_WHITE);
 		}
-		HAL_Delay(500);
+		HAL_Delay(1000);
 		memset ( csqData, 0, strlen(csqData) ) ;
 		memset ( pin, 0, strlen(pin) ) ;
 		HAL_Delay(TIME_MSG_DISPLAY);
 }
 
 
-/*_____________________________________________Gửi dữ liệu thiết bị bằng SIM______________________________________________*/
+/*_______________________________________Gửi dữ liệu thiết bị bằng SIM______________________________________*/
 
 void MQTTPublishData(){
-
 		char* csqData = SIM7600E.getCSQ() ;
 		char* pin = readPin();
 		char lwPayload[100]="{\"data\": \"BA+PERDATA:";
 		strcat(lwPayload,csqData);
 		strcat(lwPayload,pin);
 		strcat(lwPayload,"\"}\r");
-
 		// setup payload để gửi dữ liệu lên broker
 		SSD1306_Clear_Data();
 		SSD1306_Putstring(2, 5, (char*)"______CAP NHAT______", &Font_5x7, SSD1306_COLOR_WHITE);
-		HAL_Delay(100);
+
 		SSD1306_Putstring(3, 5, (char*)"3G/4G LTE ... ", &Font_5x7, SSD1306_COLOR_WHITE);
 
 		if(SIM7600E.mqttUpdateData(lwPayload)){
@@ -403,7 +400,7 @@ void MQTTPublishData(){
 		}else {
 			SSD1306_Putstring(4, 5, (char*)"-> THAT BAI!", &Font_5x7, SSD1306_COLOR_WHITE);
 		}
-		HAL_Delay(500);
+		HAL_Delay(1000);
 		memset ( csqData, 0, strlen(csqData) ) ;
 		memset ( pin, 0, strlen(pin) ) ;
 		HAL_Delay(TIME_MSG_DISPLAY);
@@ -411,7 +408,7 @@ void MQTTPublishData(){
 }
 
 
-/*__________________________________________Hàm chính chạy chương trình_____________________________________________*/
+/*______________________________________Hàm chính chạy chương trình_______________________________________*/
 
 void OS_loop(){
 	if (  SIM7600E.rxDone_FLAG == true  ){
@@ -425,12 +422,19 @@ void OS_loop(){
 		lrwanEvent = LRWAN.identifyEvent() ;
 		LRWAN.memreset() ;
 	}
+	init();
+	while(waitFlag == true){
+			HAL_Delay(1000);
+			SSD1306_Putstring(4,12, (char*)"SAN SANG KICH HOAT", &Font_5x7, SSD1306_COLOR_WHITE);
+			HAL_Delay(1000);
+			SSD1306_Clear_Bottom();
+	}
+	SSD1306_Clear_Data();
 
 	// kiển tra trạng thái nếu không làm công việc gì thì sẽ ngủ
-	while(warningProcess!=0 || stopProcess!=0 || updateProcess!=0){
+	while(warningProcess!=0||stopProcess!=0){
 		// kiểm tra trạng thái nút cảnh báo
-		HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin,(GPIO_PinState)0);
-		switch(warningProcess) {
+		switch(warningProcess){
 			case BTN_START_WARNING_PRESSED:
 				warningProcess = SEND_CMD_BY_SIM;
 				SYSTEM.println("ENTER START WARNING PROCESS");
@@ -440,17 +444,16 @@ void OS_loop(){
 			case SEND_CMD_BY_SIM:
 				SSD1306_Clear_Data();
 				SSD1306_Putstring(2, 5, (char*)"______CANH BAO______", &Font_5x7, SSD1306_COLOR_WHITE);
+				HAL_Delay(TIME_MSG_DISPLAY);
 				SSD1306_Putstring(3, 5, (char*)"Dang gui SMS... ", &Font_5x7, SSD1306_COLOR_WHITE);
 				SYSTEM.println("Send SMS ...");
 				SIM7600E.sendSMS(DATALOGGER_NUMBER, SIM_WARNING_MSG);
 				warningProcess=SIM_CHECKING_RESPOND;
 				break;
-				// Sau đó, chờ Datalogger phản hồi qua SMS
-
+			// Sau đó, chờ Datalogger phản hồi qua SMS
 			case SIM_CHECKING_RESPOND:
 				//nếu gửi thành công thì startProcess = SEND_CMD_COMPLETED, thất bại thì tiếp tục gửi bằng lora
 				if(simCheckingRespond("OK")){
-					HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_SET);
 					SSD1306_Putstring(4, 5, (char*)"-> HOAN THANH!", &Font_5x7, SSD1306_COLOR_WHITE);
 					SYSTEM.println("SMS SENT SUCCESS");
 					warningProcess = SEND_CMD_COMPLETED;
@@ -464,8 +467,8 @@ void OS_loop(){
 
 			case SEND_CMD_BY_LRWAN:
 				SSD1306_Putstring(2, 5, (char*)"______CANH BAO______", &Font_5x7, SSD1306_COLOR_WHITE);
-				SSD1306_Putstring(3, 5, (char*)"Dang gui LoRaWAN... ", &Font_5x7, SSD1306_COLOR_WHITE);
-				SYSTEM.println("SEND BY LORAWAN");
+				SSD1306_Putstring(3, 5, (char*)"Dang gui LoRa... ", &Font_5x7, SSD1306_COLOR_WHITE);
+				SYSTEM.println("SEND BY LORA");
 				SSD1306_Clear_Bottom();
 				warningProcess = LRWAN_CHECKING_RESPOND;
 				break;
@@ -473,48 +476,43 @@ void OS_loop(){
 			case LRWAN_CHECKING_RESPOND:
 				//nếu gửi thành công thì startProcess = SEND_CMD_COMPLETED, thất bại thì startProcess = IDLE
 				if(lrwanSendAndCheckingRespond(LRWAN_WARNING_MSG,LRWAN_WARNING_RES_MSG)){
-					HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_SET);
 					SSD1306_Putstring(4, 5, (char*)"-> HOAN THANH!", &Font_5x7, SSD1306_COLOR_WHITE);
-					SYSTEM.println("SEND BY LORAWAN SUCCESS");
+					SYSTEM.println("SEND BY LORA SUCCESS");
 					warningProcess = SEND_CMD_COMPLETED;
 				}else{
 					SSD1306_Putstring(4, 5, (char*)"-> THAT BAI!", &Font_5x7, SSD1306_COLOR_WHITE);
-					SYSTEM.println("SEND BY LORAWAN FAILED");
+					SYSTEM.println("SEND BY LORA FAILED");
 					SYSTEM.println("WARNING FAILED");
 					warningProcess = IDLE;
 				}
 				HAL_Delay(TIME_MSG_DISPLAY);
 				break;
 			case SEND_CMD_COMPLETED:
-
+				HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_SET);
 				SYSTEM.println("DONE WARNING PROCESS");
-				waitForNextTrigger() ;
 				warningProcess=IDLE;
-
+				doneWarningFlag = true;
 				break;
 		}
 		// kiểm tra trạng thái nút dừng cảnh báo
 		switch(stopProcess){
-
 			case BTN_STOP_WARNING_PRESSED:
 				stopProcess = SEND_CMD_BY_SIM;
 				SYSTEM.println("ENTER STOP WARNING PROCESS");
 				break;
 
 			case SEND_CMD_BY_SIM:
-
 				SSD1306_Clear_Data();
 				SSD1306_Putstring(2, 5, (char*)"____DUNG CANH BAO____", &Font_5x7, SSD1306_COLOR_WHITE);
+				HAL_Delay(TIME_MSG_DISPLAY);
 				SSD1306_Putstring(3, 5, (char*)"Dang gui SMS... ", &Font_5x7, SSD1306_COLOR_WHITE);
 				SYSTEM.println("Send SMS ...");
 				SIM7600E.sendSMS(DATALOGGER_NUMBER, SIM_STOP_MSG);
 				stopProcess=SIM_CHECKING_RESPOND;
 				break;
-
 			case SIM_CHECKING_RESPOND:
 				//nếu gửi thành công thì startProcess = SEND_CMD_COMPLETED, thất bại thì tiếp tục gửi bằng lora
 				if(simCheckingRespond("OK")){
-					HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_SET);
 					SSD1306_Putstring(4, 5, (char*)"-> HOAN THANH!", &Font_5x7, SSD1306_COLOR_WHITE);
 					SYSTEM.println("SMS SENT SUCCESS");
 					stopProcess = SEND_CMD_COMPLETED;
@@ -525,61 +523,43 @@ void OS_loop(){
 				}
 				HAL_Delay(TIME_MSG_DISPLAY);
 				break;
-
 			case SEND_CMD_BY_LRWAN:
-
 				SSD1306_Putstring(2, 5, (char*)"____DUNG CANH BAO____", &Font_5x7, SSD1306_COLOR_WHITE);
-				SSD1306_Putstring(3, 5, (char*)"Dang gui LoRaWAN... ", &Font_5x7, SSD1306_COLOR_WHITE);
-				SYSTEM.println("SEND BY LORAWAN");
+				SSD1306_Putstring(3, 5, (char*)"Dang gui LoRa... ", &Font_5x7, SSD1306_COLOR_WHITE);
+				SYSTEM.println("SEND BY LORA");
 				SSD1306_Clear_Bottom();
 				stopProcess = LRWAN_CHECKING_RESPOND;
 				break;
-
 			case LRWAN_CHECKING_RESPOND:
 				//nếu gửi thành công thì stopProcess = SEND_CMD_COMPLETED, thất bại thì stopProcess = IDLE
 				if(lrwanSendAndCheckingRespond(LRWAN_STOP_MSG,LRWAN_STOP_RES_MSG)){
 					SSD1306_Putstring(4, 5, (char*)"-> HOAN THANH!", &Font_5x7, SSD1306_COLOR_WHITE);
-					SYSTEM.println("SENT BY LORAWAN SUCCESS");
+					SYSTEM.println("SENT BY LORA SUCCESS");
 					stopProcess = SEND_CMD_COMPLETED;
 				}else{
 					SSD1306_Putstring(4, 5, (char*)"-> THAT BAI!", &Font_5x7, SSD1306_COLOR_WHITE);
-					SYSTEM.println("SENT BY LORAWAN FAILED");
+					SYSTEM.println("SENT BY LORA FAILED");
 					SYSTEM.println("STOP WARNING FAILED");
 					stopProcess = IDLE;
 				}
 				HAL_Delay(TIME_MSG_DISPLAY);
 				break;
-
 			case SEND_CMD_COMPLETED:
 				HAL_GPIO_WritePin(LED_Working_Status_GPIO_Port, LED_Working_Status_Pin, GPIO_PIN_SET);
 				SYSTEM.println("DONE STOP WARNING PROCESS");
-				waitForNextTrigger() ;
+				doneWarningFlag = true;
 				stopProcess=IDLE;
 				break;
 		}
-		// kiểm tra trạng thái gửi dữ liệu thiết bị lên server
-		switch(updateProcess){
-			case MQTT_PUBLIC_DATA:
-				if( warningProcess==0 && stopProcess==0 ){
-					SYSTEM.println("START UPDATE DATA BY SIM");
-					MQTTPublishData();
-					SYSTEM.println("DONE UPDATE DATA BY SIM");
-				}
-				updateProcess=LRWAN_UPDATE_DATA;
-				break;
-			case LRWAN_UPDATE_DATA:
-				if(  warningProcess==0 && stopProcess==0 ){
-					SYSTEM.println("START UPDATE DATA BY lORAWAN");
-					lrwanUpdateData();
-					SYSTEM.println("DONE UPDATE DATA BY lORAWAN");
-				}
-				waitForNextTrigger() ;
-				updateProcess=IDLE;
-				break;
-			}
+		if(stopProcess == 0 && warningProcess == 0){
+			HAL_Delay(TIME_MSG_DISPLAY);
+			waitFlag = true;
+
+		//	// khi đã kiểm tra và hoàn tất các công việc thì bước vào trạng thái ngủ
+			displayDoneWarning(doneWarningFlag);
 		}
-	// khi đã kiểm tra và hoàn tất các công việc thì bước vào trạng thái ngủ
-//	enterStopMode();
+	}
+
 }
 
 
@@ -620,22 +600,19 @@ int main(void)
   MX_USART4_UART_Init();
   MX_USART5_UART_Init();
   MX_RTC_Init();
-  MX_I2C1_Init();
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
+
   updateProcess=MQTT_PUBLIC_DATA;
   /* USER CODE END 2 */
   /* Cấu hình thời gian cho RTC với chu kì ngắt 120s */
-//  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 120, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
-//    {
-//      Error_Handler();
-//    }
-  HAL_ADCEx_Calibration_Start(&hadc, ADC_SINGLE_ENDED);
+  if (HAL_RTCEx_SetWakeUpTimer_IT(&hrtc, 600, RTC_WAKEUPCLOCK_CK_SPRE_16BITS) != HAL_OK)
+    {
+      Error_Handler();
+    }
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-	init();
-	SSD1306_Clear_Data();
   while (1)
   {
 	  OS_loop();
